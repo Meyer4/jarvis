@@ -71,7 +71,7 @@ class AirTouchService : LifecycleService() {
             val initialized = runCatching { engine.initialize() }
             if (!serviceStopping.get()) {
                 ContextCompat.getMainExecutor(this).execute {
-                    if (!serviceStopping.get() && !isDestroyed) {
+                    if (!serviceStopping.get()) {
                         initialized.onSuccess { bindCamera() }
                             .onFailure { error -> fail(error.message ?: "Could not load the hand model.") }
                     }
@@ -107,7 +107,7 @@ class AirTouchService : LifecycleService() {
     }
 
     private fun bindCamera() {
-        if (isDestroyed || gestureEngine == null) return
+        if (serviceStopping.get() || gestureEngine == null) return
         if (!Settings.canDrawOverlays(this)) {
             fail("Overlay permission was not granted. Air Touch has been stopped.")
             return
@@ -139,7 +139,7 @@ class AirTouchService : LifecycleService() {
 
         val cameraFuture = ProcessCameraProvider.getInstance(this)
         cameraFuture.addListener({
-            if (serviceStopping.get() || isDestroyed) return@addListener
+            if (serviceStopping.get()) return@addListener
             try {
                 val provider = cameraFuture.get()
                 cameraProvider = provider

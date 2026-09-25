@@ -147,8 +147,8 @@ class GestureEngine(
         const val THUMB_TIP = 4
         const val INDEX_TIP = 8
         const val MIDDLE_MCP = 9
-        const val FINGER_TIPS = intArrayOf(8, 12, 16, 20)
-        const val FINGER_MCPS = intArrayOf(5, 9, 13, 17)
+        val FINGER_TIPS = intArrayOf(8, 12, 16, 20)
+        val FINGER_MCPS = intArrayOf(5, 9, 13, 17)
         const val PINCH_RATIO = 0.32f
         const val FINGER_EXTENSION_RATIO = 1.16f
         const val PINCH_DEBOUNCE_MILLIS = 450L
