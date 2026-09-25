@@ -1,0 +1,1 @@
+Place optional bundled model files in this directory before building. JarvisAI copies supported files to private storage on first run. Large model files are excluded from Git; use the in-app model importer for normal installs.

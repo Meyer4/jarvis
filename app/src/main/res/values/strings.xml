@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">JarvisAI</string>
+    <string name="channel_assistant_name">Jarvis assistant</string>
+    <string name="channel_assistant_description">Shows when Jarvis is listening in the background.</string>
+    <string name="channel_boot_name">Jarvis startup</string>
+    <string name="channel_boot_description">Reminds you to resume listening after device restart.</string>
+</resources>

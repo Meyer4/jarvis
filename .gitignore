@@ -1,0 +1,26 @@
+# Gradle and Android build output
+.gradle/
+**/build/
+local.properties
+*.iml
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing material and local credentials
+*.jks
+*.keystore
+secrets.properties
+.env
+
+# Downloaded model weights (large and separately licensed)
+*.gguf
+*.onnx
+*.task
+*.tflite
+*.safetensors
+app/src/main/assets/models/**
+!app/src/main/assets/models/README.md
+!app/src/main/assets/models/.gitkeep
