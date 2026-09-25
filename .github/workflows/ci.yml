@@ -45,7 +45,7 @@ jobs:
           ./gradlew --no-daemon clean testDebugUnitTest assembleDebug --stacktrace > gradle-build.log 2>&1
           result=$?
           if [ "$result" -ne 0 ]; then
-            diagnostics="$(grep -E '(^e: |^FAILURE:|^What went wrong:|^Execution failed|^Could not resolve|^Could not find|unresolved reference| error:)' gradle-build.log | tail -n 40)"
+            diagnostics="$(grep -Ei -A 8 -B 1 '(FAILURE:|What went wrong:|Execution failed|Could not resolve|Could not find|unresolved reference| error:|requires|compile ?sdk|aar metadata|A failure occurred|issues were found)' gradle-build.log | tail -n 80)"
             log_tail="$(tail -n 60 gradle-build.log)"
             if [ -z "$diagnostics" ]; then diagnostics="$log_tail"; else diagnostics="$diagnostics"$'\n'"$log_tail"; fi
             printf '%s\n' "$diagnostics" >> "$GITHUB_STEP_SUMMARY"
