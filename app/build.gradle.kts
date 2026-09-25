@@ -68,8 +68,8 @@ android {
 
     packaging {
         jniLibs {
-            // Native inference AARs share the same C++ runtime soname.
-            pickFirsts += setOf("**/libc++_shared.so")
+            // Sherpa and the direct ONNX API ship the same pinned ONNX Runtime SONAME.
+            pickFirsts += setOf("**/libc++_shared.so", "**/libonnxruntime.so")
             useLegacyPackaging = false
         }
     }
