@@ -46,9 +46,10 @@ jobs:
           result=$?
           if [ "$result" -ne 0 ]; then
             diagnostics="$(grep -E '(^e: |^FAILURE:|^What went wrong:|^Execution failed|^Could not resolve|^Could not find|unresolved reference| error:)' gradle-build.log | tail -n 40)"
-            if [ -z "$diagnostics" ]; then diagnostics="$(tail -n 40 gradle-build.log)"; fi
-            printf '%s\\n' "$diagnostics" >> "$GITHUB_STEP_SUMMARY"
-            annotation="$(printf '%s' "$diagnostics" | tr '\\n' ';' | cut -c1-6000 | sed 's/%/%25/g; s/::/%3A%3A/g')"
+            log_tail="$(tail -n 60 gradle-build.log)"
+            if [ -z "$diagnostics" ]; then diagnostics="$log_tail"; else diagnostics="$diagnostics"$'\n'"$log_tail"; fi
+            printf '%s\n' "$diagnostics" >> "$GITHUB_STEP_SUMMARY"
+            annotation="$(printf '%s' "$diagnostics" | tr '\n' ';' | cut -c1-6000 | sed 's/%/%25/g; s/::/%3A%3A/g')"
             echo "::error title=Gradle build failed::$annotation"
             tail -n 80 gradle-build.log
           fi
