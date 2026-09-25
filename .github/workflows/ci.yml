@@ -39,12 +39,28 @@ jobs:
           cache-provider: basic
 
       - name: Build and test
-        run: ./gradlew --no-daemon clean testDebugUnitTest assembleDebug
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --no-daemon clean testDebugUnitTest assembleDebug --stacktrace > gradle-build.log 2>&1
+          result=$?
+          if [ "$result" -ne 0 ]; then
+            diagnostics="$(grep -E '(^e: |^FAILURE:|^What went wrong:|^Execution failed|^Could not resolve|^Could not find|unresolved reference| error:)' gradle-build.log | tail -n 40)"
+            if [ -z "$diagnostics" ]; then diagnostics="$(tail -n 40 gradle-build.log)"; fi
+            printf '%s\\n' "$diagnostics" >> "$GITHUB_STEP_SUMMARY"
+            annotation="$(printf '%s' "$diagnostics" | tr '\\n' ';' | cut -c1-6000 | sed 's/%/%25/g; s/::/%3A%3A/g')"
+            echo "::error title=Gradle build failed::$annotation"
+            tail -n 80 gradle-build.log
+          fi
+          exit "$result"
 
-      - name: Upload debug APK
+      - name: Upload debug APK and build log
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: jarvisai-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            gradle-build.log
+          if-no-files-found: warn
           retention-days: 14
