@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.JarvisAI" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/jarvis_background</item>
+        <item name="android:navigationBarColor">@color/jarvis_background</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="colorPrimary">@color/jarvis_accent</item>
+        <item name="colorSecondary">@color/jarvis_accent_soft</item>
+        <item name="android:colorAccent">@color/jarvis_accent</item>
+        <item name="android:windowBackground">@color/jarvis_background</item>
+    </style>
+</resources>

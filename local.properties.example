@@ -1,0 +1,5 @@
+# Copy these entries into local.properties (never commit the real file).
+# Android Studio normally manages sdk.dir for you.
+# sdk.dir=/absolute/path/to/Android/Sdk
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
