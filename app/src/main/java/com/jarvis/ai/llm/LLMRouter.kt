@@ -12,7 +12,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-/** Routes conversations to local llama.cpp first and to configured cloud APIs when available. */
+/**
+ * Routes conversations to whichever model is available: the on-device GGUF first, then the cloud
+ * providers the user enabled, tried in the order they chose.
+ */
 class LLMRouter(
     private val localEngine: LocalLLMEngine,
     private val cloudClient: CloudLLMClient,
@@ -21,8 +24,11 @@ class LLMRouter(
 ) {
     private val responseMutex = Mutex()
 
-    /** Uses recent Room history as context and persists both sides of the completed exchange. */
-    suspend fun respond(userText: String): String = responseMutex.withLock {
+    /** Answers a request and returns only the text, for callers that do not need the source. */
+    suspend fun respond(userText: String): String = respondDetailed(userText).text
+
+    /** Uses recent Room history as context, persists both sides, and reports which model answered. */
+    suspend fun respondDetailed(userText: String): AssistantReply = responseMutex.withLock {
         val cleanText = userText.trim().take(MAX_USER_CHARS)
         require(cleanText.isNotBlank()) { "The recognized request was empty." }
         val recent = withContext(Dispatchers.IO) {
@@ -35,9 +41,9 @@ class LLMRouter(
             }
         }
         val messages = buildMessages(recent, cleanText)
-        val answer = generate(messages)
-        remember(cleanText, answer)
-        answer
+        val reply = generate(messages)
+        remember(cleanText, reply.text)
+        reply
     }
 
     /** Persists a result produced by an allowlisted native system tool. */
@@ -45,12 +51,13 @@ class LLMRouter(
         remember(userText.trim().take(MAX_USER_CHARS), assistantText.trim().take(MAX_RESPONSE_CHARS))
     }
 
-    private suspend fun generate(messages: List<ChatMessage>): String {
+    private suspend fun generate(messages: List<ChatMessage>): AssistantReply {
         var localFailure: Throwable? = null
         if (localEngine.isModelAvailable) {
             val prompt = formatLocalPrompt(messages)
             try {
-                return localEngine.generate(prompt).take(MAX_RESPONSE_CHARS)
+                val text = localEngine.generate(prompt).take(MAX_RESPONSE_CHARS)
+                return AssistantReply(text, localSourceName())
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -58,15 +65,20 @@ class LLMRouter(
             }
         }
 
-        if (networkUtils.hasValidatedInternet() && cloudClient.isConfigured) {
+        if (cloudClient.isConfigured && cloudReachable()) {
             try {
-                return cloudClient.complete(messages).take(MAX_RESPONSE_CHARS)
+                val answer = cloudClient.complete(messages)
+                return AssistantReply(
+                    answer.text.take(MAX_RESPONSE_CHARS),
+                    "${answer.provider.label} · ${answer.provider.model}",
+                )
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (cloudError: Exception) {
                 if (localFailure != null) {
                     throw IllegalStateException(
-                        "The local model and cloud providers are unavailable. ${safeMessage(localFailure)}",
+                        "The on-device model and every enabled cloud provider failed. " +
+                            safeMessage(localFailure),
                         cloudError,
                     )
                 }
@@ -76,23 +88,41 @@ class LLMRouter(
 
         if (localFailure != null) {
             throw IllegalStateException(
-                "Local inference failed: ${safeMessage(localFailure)}. " +
-                    if (networkUtils.hasValidatedInternet() && !cloudClient.isConfigured) {
-                        "Add an API key to local.properties to enable cloud fallback."
-                    } else {
-                        "Import a smaller GGUF or connect to a configured cloud provider."
-                    },
+                "The on-device model failed: ${safeMessage(localFailure)}. ${localRecoveryHint()}",
                 localFailure,
             )
         }
 
-        throw IllegalStateException(
-            if (!localEngine.isModelAvailable) {
-                "No local GGUF is installed. Import a quantized GGUF model, or configure an API key in local.properties while online."
-            } else {
-                "Jarvis is offline and no local model is ready."
-            },
-        )
+        throw IllegalStateException(noModelHint())
+    }
+
+    private fun cloudReachable(): Boolean =
+        networkUtils.hasValidatedInternet() || (networkUtils.hasNetwork() && cloudClient.hasLanEndpoint)
+
+    private fun localSourceName(): String =
+        localEngine.modelFilename()?.let { "on-device model ($it)" } ?: "on-device model"
+
+    private fun localRecoveryHint(): String = when {
+        cloudClient.isConfigured && !cloudReachable() ->
+            "Connect to the internet to use the cloud providers you enabled."
+        cloudClient.isConfigured ->
+            "Your enabled cloud providers were tried too. Check their keys and model names in the JarvisAI dashboard."
+        else -> "Import a smaller GGUF model, or enable a cloud provider in the JarvisAI dashboard."
+    }
+
+    private fun noModelHint(): String {
+        val cloudList = "Kimi, OpenAI, Claude, Gemini, Grok, DeepSeek, Groq, Mistral, OpenRouter, or your own endpoint"
+        return when {
+            !localEngine.isModelAvailable && cloudClient.isConfigured && !cloudReachable() ->
+                "No on-device model is installed and there is no usable connection. Import a GGUF model, " +
+                    "or go online to use the cloud providers you enabled."
+            !localEngine.isModelAvailable ->
+                "No AI model is ready. Import a quantized GGUF model, or enable a cloud provider " +
+                    "($cloudList) in the JarvisAI dashboard."
+            cloudClient.isConfigured && !cloudReachable() ->
+                "Jarvis is offline and no on-device model is installed. Import a GGUF model to answer without a network."
+            else -> "Jarvis is offline and no local model is ready."
+        }
     }
 
     private suspend fun remember(userText: String, assistantText: String) = withContext(Dispatchers.IO) {
@@ -167,6 +197,13 @@ class LLMRouter(
         const val SYSTEM_PROMPT =
             "You are Jarvis, a helpful, privacy-conscious Android assistant. " +
                 "Be truthful, concise, and ask for clarification if a request is ambiguous. " +
+                "Answers are read aloud, so keep them short and avoid markdown or code blocks. " +
                 "Never claim a device action succeeded unless the app explicitly confirmed it."
     }
 }
+
+/** An answer plus the model that produced it, so the dashboard can show the active route. */
+data class AssistantReply(
+    val text: String,
+    val source: String,
+)

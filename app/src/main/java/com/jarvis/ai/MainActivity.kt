@@ -28,6 +28,7 @@ import com.google.android.material.card.MaterialCardView
 import com.jarvis.ai.gesture.AirTouchService
 import com.jarvis.ai.memory.ModelStore
 import com.jarvis.ai.service.JarvisForegroundService
+import com.jarvis.ai.ui.ProviderPanel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var assistantButton: MaterialButton
     private lateinit var gestureButton: MaterialButton
     private lateinit var speedValueView: TextView
+    private lateinit var providerPanel: ProviderPanel
     private var pendingAction: PendingAction? = null
     private var receiverRegistered = false
 
@@ -200,6 +202,18 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(sectionCard("ON-DEVICE MODELS", modelView))
 
+        val providersContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(6), dp(2), dp(6), dp(8))
+        }
+        providerPanel = ProviderPanel(
+            activity = this,
+            scope = lifecycleScope,
+            container = providersContainer,
+            onStatus = { message -> setStatus(message) },
+        )
+        root.addView(sectionCard("CLOUD AI PROVIDERS", providersContainer))
+
         val speechControls = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(8), dp(14), dp(14))
@@ -254,6 +268,7 @@ class MainActivity : AppCompatActivity() {
         if (::speedValueView.isInitialized) {
             speedValueView.text = String.format(Locale.getDefault(), "%.2f×", AppSettings.ttsSpeed(this))
         }
+        if (::providerPanel.isInitialized) providerPanel.render()
     }
 
     private fun toggleAssistant() {

@@ -9,7 +9,8 @@
 - **Wake word:** streaming openWakeWord ONNX pipeline (`melspectrogram.onnx` → `embedding_model.onnx` → Hey Jarvis classifier) on a dedicated, low-priority inference thread.
 - **Speech recognition:** Sherpa-ONNX SenseVoice or Whisper, with 16 kHz mono capture, pre-roll, and automatic end-of-speech silence detection.
 - **Speech output:** Android System TextToSpeech with an adjustable speech-rate control.
-- **Hybrid LLM routing:** try a local llama.cpp GGUF first; when unavailable or inference fails, use configured OpenAI or Anthropic APIs if online.
+- **Hybrid LLM routing:** try a local llama.cpp GGUF first; when it is missing or inference fails, call the cloud providers you enabled — Kimi (Moonshot), OpenAI, Anthropic Claude, Google Gemini, xAI Grok, DeepSeek, Groq, Mistral, OpenRouter, or any OpenAI-compatible endpoint you host yourself.
+- **Provider control:** enable, edit, test, and reorder providers in the dashboard, fetch a provider's live model list instead of typing names, and keep keys in app-private storage or compile them in from the build environment.
 - **Private memory:** Room/SQLite keeps recent conversation turns on device.
 - **Air Touch:** CameraX front camera + MediaPipe Hand Landmarker, low-pass filtered index-finger-tip cursor, pinch-to-talk, fist-to-hide, and open-palm-to-show shortcuts.
 - **System tools:** allowlisted app launch, clock alarms and timers, battery status, media volume, flashlight, and web search. The assistant never runs shell commands or executes arbitrary model-generated code.
@@ -39,7 +40,7 @@
                                    ▼                         ▼
                          ┌─────────────────────────────────────────┐
                          │ LLMRouter                               │
-                         │ llama.cpp GGUF → OpenAI/Anthropic       │
+                         │ llama.cpp GGUF → enabled cloud providers │
                          └────────────────┬────────────────────────┘
                                           │
                             ┌─────────────┴────────────┐
@@ -62,13 +63,15 @@ git clone https://github.com/Meyer4/jarvis.git
 cd jarvis
 cp local.properties.example local.properties
 # Add sdk.dir if Android Studio has not already created it.
-# Optional: add OPENAI_API_KEY and/or ANTHROPIC_API_KEY to local.properties.
+# Optional: preload cloud provider keys (MOONSHOT_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY,
+# GEMINI_API_KEY, XAI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY,
+# OPENROUTER_API_KEY, CUSTOM_LLM_API_KEY) in local.properties.
 ./gradlew :app:assembleDebug
 ```
 
 The APK is written to `app/build/outputs/apk/debug/app-debug.apk`. Open the root folder in Android Studio to run or debug it. Gradle downloads the pinned Android libraries, Sherpa-ONNX AAR from JitPack, and llama.cpp Android binding from Maven Central. CI builds the debug APK on pushes and pull requests.
 
-API keys can instead be supplied as `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` environment variables. **Never commit `local.properties`, API keys, signing keys, model files, or generated APKs.** `local.properties` is git-ignored and `local.properties.example` is safe to copy. Keys supplied this way are compiled into the APK and can be extracted; use blank keys for public builds and avoid shipping an APK that embeds a personal key.
+API keys can instead be supplied as environment variables using the same names listed above. Any key found at build time is compiled in as a default and can still be replaced or turned off in the app's **Cloud AI providers** panel. **Never commit `local.properties`, API keys, signing keys, model files, or generated APKs.** `local.properties` is git-ignored and `local.properties.example` is safe to copy. Keys supplied this way are compiled into the APK and can be extracted; use blank keys for public builds and avoid shipping an APK that embeds a personal key.
 
 ## Download and install models
 
@@ -105,7 +108,30 @@ Whisper is also supported. Import a matching encoder, decoder, and tokenizer (fo
 
 Download a quantized `.gguf` compatible with llama.cpp. For example, select an appropriate Q4 quantization of Llama 3.2 3B Instruct or Phi-3 Mini from a trusted publisher such as [Hugging Face](https://huggingface.co/models?search=GGUF). Model licenses and size vary; check each model card. Import one GGUF at a time. A 2K token context is used to limit memory use on mobile.
 
-### 4. MediaPipe hand landmarker
+### 4. Cloud AI providers (optional)
+
+Open **Cloud AI providers** on the dashboard to enable, edit, test, and reorder providers. Jarvis always tries the on-device GGUF first and then walks the enabled providers in the order shown.
+
+| Provider | Protocol | Default model | Key name |
+| --- | --- | --- | --- |
+| Kimi · Moonshot AI | OpenAI-compatible | `kimi-k2.6` | `MOONSHOT_API_KEY` |
+| OpenAI | OpenAI-compatible | `gpt-5.4-mini` | `OPENAI_API_KEY` |
+| Anthropic Claude | Anthropic Messages | `claude-haiku-4-5` | `ANTHROPIC_API_KEY` |
+| Google Gemini | OpenAI-compatible | `gemini-3.5-flash` | `GEMINI_API_KEY` |
+| xAI Grok | OpenAI-compatible | `grok-4.7` | `XAI_API_KEY` |
+| DeepSeek | OpenAI-compatible | `deepseek-v4-flash` | `DEEPSEEK_API_KEY` |
+| Groq | OpenAI-compatible | `llama-3.3-70b-versatile` | `GROQ_API_KEY` |
+| Mistral AI | OpenAI-compatible | `mistral-medium-latest` | `MISTRAL_API_KEY` |
+| OpenRouter | OpenAI-compatible | `google/gemini-2.5-flash` | `OPENROUTER_API_KEY` |
+| Custom / self-hosted | OpenAI-compatible | your choice | `CUSTOM_LLM_API_KEY` |
+
+Model names change often, so **Fetch models** in the editor pulls the live list from the provider and lets you pick; the edit dialog also accepts a typed name. **Test** sends a one-word prompt through the settings currently in the dialog and reports the reply or the provider's error message.
+
+Providers you do not want are simply left disabled; Jarvis never contacts a provider that is off or missing a key. Keys typed in the app live in the app's private `SharedPreferences` sandbox, and build-time keys (`local.properties` / environment) act as defaults until you save an override.
+
+**Self-hosted models.** The custom entry works with Ollama, LM Studio, vLLM, llama.cpp server, and any other OpenAI-compatible endpoint. Enter the base URL, for example `http://192.168.1.20:11434/v1`, leave the key blank when the server does not require one, and enable **Allow plain http:// endpoints** — Android blocks cleartext per request unless that switch is on, and the app refuses plain `http://` base URLs otherwise. Prefer `https://` when you can, for example through a reverse proxy or tunnel.
+
+### 5. MediaPipe hand landmarker
 
 Download the official `hand_landmarker.task` model from Google's [MediaPipe model page](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker). Import it to enable Air Touch. The app uses only the front camera, locally, while the Air Touch foreground service is active.
 
@@ -120,7 +146,7 @@ The dashboard shows whether wake word, STT, local GGUF, and gesture models are r
 3. **Camera:** requested only when Air Touch is enabled. Frames are analyzed on device and are not saved or sent to a server.
 4. **Display over other apps:** requested separately by Android so the cursor can float above apps. The cursor overlay is non-touchable and does not inject system taps. **Pinch-to-talk** is the supported global shortcut; Android protects cross-app click injection behind Accessibility APIs, which JarvisAI does not request.
 5. **Battery optimization:** optional and user initiated. Continuous microphone work can increase battery use; the exemption is not enabled silently.
-6. **Network:** only used for configured cloud APIs or web searches. API keys are build-time `BuildConfig` values from environment variables or ignored `local.properties`; the app contains no default keys.
+6. **Network:** only used for enabled cloud AI providers, web searches, and wake-word or speech model downloads you start yourself. Prompts go directly to the provider endpoint you configured; there is no middleman server. Cloud usage stays off until you enable a provider (or compile in a key) and Android reports a usable connection, except for a self-hosted endpoint on the local network. Keys entered in the app are stored in app-private storage; keys supplied at build time are `BuildConfig` constants compiled into the APK, so use blank keys for public builds and never ship an APK that embeds a personal key.
 
 ### Android 14/15 background restrictions
 
@@ -140,7 +166,8 @@ Screenshots are welcome in `docs/screenshots/`. Add them here when captured on a
 - Engines and services are separated by package; microphone, model loading, database work, network calls, camera analysis, and inference run away from the main thread.
 - System actions are allowlisted and triggered only by explicit recognized user phrases. Cloud models cannot directly invoke Android actions.
 - Model and API service failures surface as dashboard/service status instead of terminating the app.
-- Unit tests cover timer/alarm parsing. Run them with `./gradlew testDebugUnitTest`.
+- Cloud providers live in `ModelProviderCatalog` (`llm/ModelProvider.kt`): add a template for a new service, add its key name to the list in `app/build.gradle.kts`, and the dashboard, settings store, and router pick it up automatically.
+- Unit tests cover timer/alarm parsing, the provider catalog, and provider settings/ordering. Run them with `./gradlew testDebugUnitTest`.
 
 ## License
 
