@@ -25,6 +25,7 @@ import com.jarvis.ai.llm.LocalLLMEngine
 import com.jarvis.ai.memory.AppDatabase
 import com.jarvis.ai.memory.ModelStore
 import com.jarvis.ai.network.CloudLLMClient
+import com.jarvis.ai.network.CloudProviderStore
 import com.jarvis.ai.network.NetworkUtils
 import com.jarvis.ai.stt.SpeechToTextEngine
 import com.jarvis.ai.tools.ToolRegistry
@@ -148,9 +149,11 @@ class JarvisForegroundService : Service() {
                 localEngine = local
                 ttsEngine = tts
                 turnTools = ToolRegistry(this@JarvisForegroundService)
+                val providerStore = CloudProviderStore(this@JarvisForegroundService)
                 llmRouter = LLMRouter(
                     localEngine = local,
-                    cloudClient = CloudLLMClient(),
+                    // Read the enabled providers per request so dashboard changes apply immediately.
+                    cloudClient = CloudLLMClient { providerStore.usableConfigs() },
                     networkUtils = NetworkUtils(this@JarvisForegroundService),
                     conversationDao = AppDatabase.get(this@JarvisForegroundService).conversationDao(),
                 )
@@ -263,14 +266,15 @@ class JarvisForegroundService : Service() {
             }
             updateStatus("You said: ${recognized.take(90)}")
             val toolResult = tools.execute(recognized)
-            val reply = if (toolResult != null) {
+            if (toolResult != null) {
                 router.rememberToolExchange(recognized, toolResult.spokenMessage)
-                toolResult.spokenMessage
-            } else {
-                router.respond(recognized)
+                tts?.speak(toolResult.spokenMessage, AppSettings.ttsSpeed(this))
+                updateStatus("Ready. Handled on device. Say Hey Jarvis or tap Talk now.")
+                return
             }
-            tts?.speak(reply, AppSettings.ttsSpeed(this))
-            updateStatus("Ready. Say Hey Jarvis or tap Talk now.")
+            val reply = router.respondDetailed(recognized)
+            tts?.speak(reply.text, AppSettings.ttsSpeed(this))
+            updateStatus("Ready. Last answer from ${reply.source}.")
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {

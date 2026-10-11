@@ -1,5 +1,18 @@
 # Copy these entries into local.properties (never commit the real file).
 # Android Studio normally manages sdk.dir for you.
 # sdk.dir=/absolute/path/to/Android/Sdk
+#
+# Every cloud AI provider is optional. A key entered here is compiled in as the default for that
+# provider and can still be replaced or turned off in the app's "Cloud AI providers" panel.
+# Providers without a key stay disabled until you add one in the app.
+MOONSHOT_API_KEY=
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
+GEMINI_API_KEY=
+XAI_API_KEY=
+DEEPSEEK_API_KEY=
+GROQ_API_KEY=
+MISTRAL_API_KEY=
+OPENROUTER_API_KEY=
+# Custom / self-hosted OpenAI-compatible endpoint (Ollama, LM Studio, vLLM, llama.cpp server).
+CUSTOM_LLM_API_KEY=

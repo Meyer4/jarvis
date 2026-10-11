@@ -34,8 +34,31 @@ android {
             abiFilters += setOf("arm64-v8a", "x86_64")
         }
 
+        // Keep this list in sync with ModelProviderCatalog.keyEnvironment in
+        // app/src/main/java/com/jarvis/ai/llm/ModelProvider.kt; a unit test guards the names.
+        val cloudProviderKeyNames = listOf(
+            "MOONSHOT_API_KEY",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "GEMINI_API_KEY",
+            "XAI_API_KEY",
+            "DEEPSEEK_API_KEY",
+            "GROQ_API_KEY",
+            "MISTRAL_API_KEY",
+            "OPENROUTER_API_KEY",
+            "CUSTOM_LLM_API_KEY",
+        )
+
+        // Legacy single-provider fields stay for compatibility with existing builds.
         buildConfigField("String", "OPENAI_API_KEY", asBuildConfigString(secret("OPENAI_API_KEY")))
         buildConfigField("String", "ANTHROPIC_API_KEY", asBuildConfigString(secret("ANTHROPIC_API_KEY")))
+
+        // One compact field carries every build-time key; in-app settings override these.
+        buildConfigField(
+            "String",
+            "CLOUD_PROVIDER_API_KEYS",
+            asBuildConfigString(cloudProviderKeyNames.joinToString(";") { name -> "$name=${secret(name)}" }),
+        )
     }
 
     buildFeatures {

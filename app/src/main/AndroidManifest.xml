@@ -29,6 +29,9 @@
         </intent>
     </queries>
 
+    <!-- Hosted providers are always contacted over https. Android allows cleartext here only so a
+         self-hosted model server on the local network can be reached, and CloudLLMClient refuses
+         http:// endpoints unless the user enables the plain-http switch for that one provider. -->
     <application
         android:name=".JarvisApp"
         android:allowBackup="false"
@@ -36,7 +39,7 @@
         android:label="JarvisAI"
         android:supportsRtl="true"
         android:theme="@style/Theme.JarvisAI"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"
