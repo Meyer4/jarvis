@@ -1,20 +1,28 @@
-name: Publish debug APK
+name: Publish debug builds
 
-# Builds the debug APK and attaches it to a rolling "debug-latest" pre-release so the newest
-# installable build can be downloaded from https://github.com/Meyer4/jarvis/releases
+# Builds the Android APK and the laptop app, then attaches them to a rolling pre-release so the
+# newest builds can be downloaded from https://github.com/Meyer4/jarvis/releases
 # without digging through workflow artifacts. Delete this file if you do not want it.
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create or replace
+        required: false
+        default: debug-latest
   push:
     branches: [main]
 
 permissions:
   contents: write
 
+env:
+  RELEASE_TAG: ${{ github.event.inputs.tag || 'debug-latest' }}
+
 jobs:
-  release:
-    name: Build and attach debug APK
+  apk:
+    name: Android APK
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source
@@ -42,19 +50,64 @@ jobs:
       - name: Build debug APK
         run: ./gradlew --no-daemon :app:assembleDebug
 
-      - name: Publish the APK to the debug-latest pre-release
+      - name: Publish the APK to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
           cp app/build/outputs/apk/debug/app-debug.apk jarvisai-debug.apk
-          gh release delete debug-latest --yes --cleanup-tag || true
-          gh release create debug-latest jarvisai-debug.apk \
-            --title "JarvisAI debug build" \
+          gh release delete "$RELEASE_TAG" --yes --cleanup-tag || true
+          gh release create "$RELEASE_TAG" jarvisai-debug.apk \
+            --title "JarvisAI downloads" \
             --prerelease \
-            --notes "Automatic debug build from commit \`${{ github.sha }}\` on \`${{ github.ref_name }}\`.
+            --notes "Automatic builds from commit \`${{ github.sha }}\` on \`${{ github.ref_name }}\`.
 
-          This is a debug-signed, pre-release APK for testing. Uninstall any earlier debug build before installing a new one.
+          These are debug-signed, pre-release builds for testing.
 
-          - No cloud AI keys are compiled into this build: add them in the app under **Cloud AI providers**, or build your own APK with keys in \`local.properties\`.
-          - Speech, wake-word, and local GGUF files are not bundled; import them from the dashboard."
+          **Android:** install \`jarvisai-debug.apk\` (allow installing unknown apps). No cloud AI keys are compiled in — add them in the app under **Cloud AI providers**. Speech, wake-word, and local GGUF files are not bundled; import them from the dashboard.
+
+          **Laptop:** download the archive for your system, extract it, and run the JarvisAI launcher inside. Provider keys can be typed in the app or set as environment variables (for example \`MOONSHOT_API_KEY\`, \`OPENAI_API_KEY\`)."
+
+  desktop:
+    name: Laptop app (${{ matrix.os }})
+    needs: apk
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: Package the desktop app
+        shell: bash
+        run: ./gradlew --no-daemon :desktop:createDistributable
+
+      - name: Archive the app image
+        shell: bash
+        run: |
+          set -e
+          APP_ROOT=desktop/build/compose/binaries/main/app
+          APP_DIR="$(find "$APP_ROOT" -maxdepth 1 -mindepth 1 | head -n 1)"
+          test -n "$APP_DIR"
+          echo "Packaging $APP_DIR"
+          tar -czf "jarvisai-desktop-${{ runner.os }}.tar.gz" -C "$(dirname "$APP_DIR")" "$(basename "$APP_DIR")"
+          ls -lh "jarvisai-desktop-${{ runner.os }}.tar.gz"
+
+      - name: Attach it to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "jarvisai-desktop-${{ runner.os }}.tar.gz" --clobber

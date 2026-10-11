@@ -105,6 +105,9 @@ kotlin {
 }
 
 dependencies {
+    // Shared Jarvis brain: provider catalog, settings, and the chat client used by both apps.
+    implementation(project(":shared"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.ktx)
