@@ -5,6 +5,7 @@ import com.jarvis.ai.memory.ConversationMessage
 import com.jarvis.ai.network.ChatMessage
 import com.jarvis.ai.network.CloudLLMClient
 import com.jarvis.ai.network.NetworkUtils
+import com.jarvis.ai.llm.JarvisPrompts
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -194,11 +195,8 @@ class LLMRouter(
         const val MAX_USER_CHARS = 2_000
         const val MAX_HISTORY_MESSAGE_CHARS = 600
         const val MAX_RESPONSE_CHARS = 4_000
-        const val SYSTEM_PROMPT =
-            "You are Jarvis, a helpful, privacy-conscious Android assistant. " +
-                "Be truthful, concise, and ask for clarification if a request is ambiguous. " +
-                "Answers are read aloud, so keep them short and avoid markdown or code blocks. " +
-                "Never claim a device action succeeded unless the app explicitly confirmed it."
+        /** Shared with the desktop app so Jarvis behaves the same on a phone and a laptop. */
+        val SYSTEM_PROMPT = JarvisPrompts.system("Android")
     }
 }
 

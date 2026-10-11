@@ -4,6 +4,16 @@
 
 > **Model weights are not checked into this repository.** They are large, separately licensed files. The app detects missing models, explains what is needed, and includes an in-app importer that stores files in app-private storage.
 
+## Modules
+
+| Module | What it is |
+| --- | --- |
+| `:shared` | Platform-neutral Jarvis brain: cloud provider catalog, provider settings, and the chat client. No Android or Compose APIs. |
+| `:app` | The Android app: wake word, speech, on-device GGUF, Air Touch, foreground services, and the dashboard. |
+| `:desktop` | JarvisAI for a laptop (Windows, macOS, Linux) built with Compose Desktop. Shares `:shared`, so every provider works the same on both. |
+
+Adding a provider to `ModelProviderCatalog` in `:shared` makes it appear on the phone **and** the laptop with no extra work.
+
 ## Features
 
 - **Wake word:** streaming openWakeWord ONNX pipeline (`melspectrogram.onnx` → `embedding_model.onnx` → Hey Jarvis classifier) on a dedicated, low-priority inference thread.
@@ -69,7 +79,18 @@ cp local.properties.example local.properties
 ./gradlew :app:assembleDebug
 ```
 
-The APK is written to `app/build/outputs/apk/debug/app-debug.apk`. Open the root folder in Android Studio to run or debug it. Gradle downloads the pinned Android libraries, Sherpa-ONNX AAR from JitPack, and llama.cpp Android binding from Maven Central. CI builds the debug APK on pushes and pull requests.
+The APK is written to `app/build/outputs/apk/debug/app-debug.apk`. Open the root folder in Android Studio to run or debug it.
+
+### Run Jarvis on your laptop
+
+The desktop app needs only a JDK 17 — no Android SDK:
+
+```bash
+./gradlew :desktop:run                       # launch JarvisAI on your computer
+./gradlew :desktop:packageDistributionForCurrentOS   # build an installer (.msi/.dmg/.deb)
+```
+
+The laptop app is a text chat: enable a provider on the left, then ask away. Provider settings are stored in `~/.jarvisai/settings.properties`, and keys can also come from environment variables (`MOONSHOT_API_KEY`, `OPENAI_API_KEY`, and so on) so you can launch it without typing anything. Speech input and spoken replies on the desktop are planned, not wired up yet. Gradle downloads the pinned Android libraries, Sherpa-ONNX AAR from JitPack, and llama.cpp Android binding from Maven Central. CI builds the debug APK on pushes and pull requests.
 
 API keys can instead be supplied as environment variables using the same names listed above. Any key found at build time is compiled in as a default and can still be replaced or turned off in the app's **Cloud AI providers** panel. **Never commit `local.properties`, API keys, signing keys, model files, or generated APKs.** `local.properties` is git-ignored and `local.properties.example` is safe to copy. Keys supplied this way are compiled into the APK and can be extracted; use blank keys for public builds and avoid shipping an APK that embeds a personal key.
 

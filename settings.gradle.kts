@@ -17,3 +17,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "JarvisAI"
 include(":app")
+include(":shared")
+include(":desktop")

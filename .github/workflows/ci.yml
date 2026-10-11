@@ -42,7 +42,8 @@ jobs:
         shell: bash
         run: |
           set +e
-          ./gradlew --no-daemon clean testDebugUnitTest assembleDebug --stacktrace > gradle-build.log 2>&1
+          # Builds both apps: the Android APK and the desktop (laptop) app.
+          ./gradlew --no-daemon clean :shared:test :app:testDebugUnitTest :app:assembleDebug :desktop:build --stacktrace > gradle-build.log 2>&1
           result=$?
           if [ "$result" -ne 0 ]; then
             diagnostics="$(grep -Ei -A 8 -B 1 '(FAILURE:|What went wrong:|Execution failed|Could not resolve|Could not find|unresolved reference| error:|requires|compile ?sdk|aar metadata|A failure occurred|issues were found)' gradle-build.log | tail -n 80)"

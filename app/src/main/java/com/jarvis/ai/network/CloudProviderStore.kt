@@ -1,94 +1,65 @@
 package com.jarvis.ai.network
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.jarvis.ai.BuildConfig
-import com.jarvis.ai.llm.ModelProviderCatalog
+import com.jarvis.ai.llm.BuildTimeKeys
 import com.jarvis.ai.llm.ModelProviderConfig
-import com.jarvis.ai.llm.ProviderResolver
-import com.jarvis.ai.llm.ProviderSettingsCodec
+import com.jarvis.ai.llm.ProviderRepository
+import com.jarvis.ai.llm.SettingsStorage
 import com.jarvis.ai.llm.StoredProviderSettings
 
 /**
- * Persists which cloud providers are enabled, their model names, endpoints, and API keys.
+ * Android binding for the shared provider brain: keeps the settings in app-private
+ * SharedPreferences and feeds in any keys compiled from `local.properties` or the environment.
  *
- * Keys entered in the app live in the app's private SharedPreferences sandbox. Keys can also be
- * compiled in from `local.properties` / environment variables, which is convenient for personal
- * builds and documented in the README.
+ * Keys typed in the app stay inside the app's own sandbox and can be replaced or cleared at any
+ * time from the "Cloud AI providers" panel.
  */
 class CloudProviderStore(context: Context) {
-    private val appContext = context.applicationContext
-    private val preferences =
-        appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val repository = ProviderRepository(
+        storage = SharedPreferencesStorage(
+            context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
+        ),
+        buildTimeKeys = BuildTimeKeys.parse(BuildConfig.CLOUD_PROVIDER_API_KEYS),
+    )
 
     /** Every catalog provider, merged with saved settings and ordered by user preference. */
-    fun configs(): List<ModelProviderConfig> = ProviderResolver.resolve(
-        stored = ModelProviderCatalog.templates.associate { it.id to stored(it.id) },
-        order = order(),
-        buildTimeKeys = buildTimeKeys,
-    )
+    fun configs(): List<ModelProviderConfig> = repository.configs()
 
     /** Providers that are enabled and complete; these are attempted in order. */
-    fun usableConfigs(): List<ModelProviderConfig> = configs().filter { it.isUsable }
+    fun usableConfigs(): List<ModelProviderConfig> = repository.usableConfigs()
 
-    fun stored(id: String): StoredProviderSettings? {
-        val raw = preferences.getString(key(id), null) ?: return null
-        return ProviderSettingsCodec.decode(raw)
-    }
+    fun stored(id: String): StoredProviderSettings? = repository.stored(id)
 
-    fun save(id: String, settings: StoredProviderSettings) {
-        preferences.edit().putString(key(id), ProviderSettingsCodec.encode(settings)).apply()
-    }
+    fun save(id: String, settings: StoredProviderSettings) = repository.save(id, settings)
 
     /** Forgets every stored value for the provider, including any in-app key. */
-    fun reset(id: String) {
-        preferences.edit().remove(key(id)).apply()
-    }
+    fun reset(id: String) = repository.reset(id)
 
-    fun order(): List<String> = ProviderResolver.orderedIds(
-        preferences.getString(KEY_ORDER, null)
-            ?.split(',')
-            ?.map { it.trim() }
-            ?.filter { it.isNotBlank() }
-            ?: emptyList(),
-    )
+    fun order(): List<String> = repository.order()
 
-    fun setOrder(ids: List<String>) {
-        preferences.edit()
-            .putString(KEY_ORDER, ProviderResolver.orderedIds(ids).joinToString(","))
-            .apply()
-    }
+    fun setOrder(ids: List<String>) = repository.setOrder(ids)
 
     /** Moves a provider up (`-1`) or down (`+1`) in the call order and returns the new order. */
-    fun move(id: String, delta: Int): List<String> {
-        val updated = ProviderResolver.move(order(), id, delta)
-        setOrder(updated)
-        return updated
-    }
+    fun move(id: String, delta: Int): List<String> = repository.move(id, delta)
 
     /** True when a key for this provider was compiled into the APK from the build environment. */
-    fun hasBuildTimeKey(id: String): Boolean {
-        val template = ModelProviderCatalog.template(id) ?: return false
-        return buildTimeKeys[template.keyEnvironment].orEmpty().isNotBlank()
-    }
+    fun hasBuildTimeKey(id: String): Boolean = repository.hasBuildTimeKey(id)
 
-    private fun key(id: String) = KEY_PREFIX + id
+    private class SharedPreferencesStorage(
+        private val preferences: SharedPreferences,
+    ) : SettingsStorage {
+        override fun read(key: String): String? = preferences.getString(key, null)
 
-    private val buildTimeKeys: Map<String, String> by lazy {
-        BuildConfig.CLOUD_PROVIDER_API_KEYS
-            .split(';')
-            .mapNotNull { entry ->
-                val separator = entry.indexOf('=')
-                if (separator <= 0) return@mapNotNull null
-                val name = entry.substring(0, separator).trim()
-                val value = entry.substring(separator + 1).trim()
-                if (name.isEmpty() || value.isEmpty()) null else name to value
-            }
-            .toMap()
+        override fun write(key: String, value: String?) {
+            preferences.edit().apply {
+                if (value == null) remove(key) else putString(key, value)
+            }.apply()
+        }
     }
 
     companion object {
         const val PREFS_NAME = "jarvis_cloud_providers"
-        private const val KEY_PREFIX = "provider_"
-        private const val KEY_ORDER = "provider_order"
     }
 }
