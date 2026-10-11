@@ -1,0 +1,60 @@
+name: Publish debug APK
+
+# Builds the debug APK and attaches it to a rolling "debug-latest" pre-release so the newest
+# installable build can be downloaded from https://github.com/Meyer4/jarvis/releases
+# without digging through workflow artifacts. Delete this file if you do not want it.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and attach debug APK
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4.0.4
+
+      - name: Install Android platform 36
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon :app:assembleDebug
+
+      - name: Publish the APK to the debug-latest pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          cp app/build/outputs/apk/debug/app-debug.apk jarvisai-debug.apk
+          gh release delete debug-latest --yes --cleanup-tag || true
+          gh release create debug-latest jarvisai-debug.apk \
+            --title "JarvisAI debug build" \
+            --prerelease \
+            --notes "Automatic debug build from commit \`${{ github.sha }}\` on \`${{ github.ref_name }}\`.
+
+          This is a debug-signed, pre-release APK for testing. Uninstall any earlier debug build before installing a new one.
+
+          - No cloud AI keys are compiled into this build: add them in the app under **Cloud AI providers**, or build your own APK with keys in \`local.properties\`.
+          - Speech, wake-word, and local GGUF files are not bundled; import them from the dashboard."
